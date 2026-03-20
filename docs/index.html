@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentProof — Zero-Knowledge Agent Policy Compliance</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'monospace'] }
+    }
+  }
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+  body { font-family: 'JetBrains Mono', monospace; }
+  .frosted {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(30, 41, 59, 0.7);
+  }
+  .redacted-line {
+    background: linear-gradient(90deg, #475569 0%, #475569 40%, transparent 40%, transparent 45%, #475569 45%, #475569 80%, transparent 80%);
+    height: 12px;
+    border-radius: 2px;
+    opacity: 0.3;
+  }
+  .progress-step { transition: all 0.3s ease; }
+  .progress-step.active { color: #3b82f6; }
+  .progress-step.done { color: #22c55e; }
+  input, select {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  input:focus, select:focus { outline: none; border-color: #3b82f6; }
+  .hash-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    word-break: break-all;
+    background: rgba(15, 23, 42, 0.8);
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid #1e293b;
+    color: #94a3b8;
+  }
+</style>
+</head>
+<body class="dark bg-zinc-950 text-slate-300 min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+  <div class="text-lg font-bold text-white tracking-tight">agentproof</div>
+  <div class="text-sm text-slate-500">Zero-knowledge agent policy compliance</div>
+  <a href="https://github.com/dvelton/agentproof" target="_blank" class="text-slate-500 hover:text-white transition-colors">
+    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+  </a>
+</header>
+
+<!-- Main -->
+<main class="flex flex-col lg:flex-row min-h-[calc(100vh-65px)]">
+
+  <!-- LEFT PANEL: Prover -->
+  <div class="flex-1 bg-slate-900 p-6 overflow-y-auto border-r border-slate-800">
+
+    <!-- Policy Editor -->
+    <div class="mb-8">
+      <h2 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+        Policy Document
+      </h2>
+      <div id="rules-container"></div>
+      <button onclick="addRule()" class="mt-3 text-xs border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 px-3 py-1.5 rounded transition-colors">+ Add Rule</button>
+      <p class="text-xs text-slate-600 mt-3">Policy remains private — only its hash is shared</p>
+    </div>
+
+    <!-- Session Log -->
+    <div class="mb-8">
+      <h2 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        Agent Session
+      </h2>
+      <div id="session-container"></div>
+      <button onclick="addToolCall()" class="mt-3 text-xs border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 px-3 py-1.5 rounded transition-colors">+ Add Tool Call</button>
+    </div>
+
+    <!-- Presets -->
+    <div class="mb-8 flex gap-3">
+      <button onclick="loadCompliant()" class="text-xs border border-green-800 text-green-500 hover:bg-green-900/30 px-3 py-1.5 rounded transition-colors">&#9654; Load Compliant Session</button>
+      <button onclick="loadViolating()" class="text-xs border border-red-800 text-red-500 hover:bg-red-900/30 px-3 py-1.5 rounded transition-colors">&#9654; Load Violating Session</button>
+    </div>
+
+    <!-- Generate -->
+    <div>
+      <button id="generate-btn" onclick="generateProof()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded transition-colors text-sm">Generate Proof</button>
+      <div id="progress" class="hidden mt-4 space-y-2 text-xs"></div>
+      <div id="proof-stats" class="hidden mt-4 text-xs text-slate-500"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Verifier -->
+  <div class="flex-1 bg-zinc-900 p-6 overflow-y-auto" style="background: linear-gradient(135deg, #18181b 0%, #0f172a 100%);">
+
+    <!-- Hidden Policy -->
+    <div class="mb-8">
+      <h2 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        Policy Document <span class="text-slate-600 font-normal">(hidden)</span>
+      </h2>
+      <div class="frosted rounded-lg p-6 relative" style="min-height: 120px;">
+        <div class="space-y-3 opacity-40">
+          <div class="redacted-line w-4/5"></div>
+          <div class="redacted-line w-3/5"></div>
+          <div class="redacted-line w-4/5"></div>
+          <div class="redacted-line w-2/5"></div>
+          <div class="redacted-line w-3/4"></div>
+        </div>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <svg class="w-8 h-8 text-slate-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <span class="text-slate-500 text-sm">Policy document not shared with verifier</span>
+        </div>
+      </div>
+      <p class="text-xs text-slate-600 mt-2 italic">The verifier receives only the commitment hash below</p>
+    </div>
+
+    <!-- Public Signals -->
+    <div class="mb-8">
+      <h2 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Public Signals</h2>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">Policy Commitment</label>
+          <div id="sig-policy" class="hash-display">— — —</div>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">Session Root</label>
+          <div id="sig-session" class="hash-display">— — —</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compliance Result -->
+    <div class="mb-8 text-center">
+      <div id="compliance-badge" class="inline-block px-6 py-3 rounded-lg text-sm font-bold bg-slate-800 text-slate-500">
+        — AWAITING PROOF —
+      </div>
+    </div>
+
+    <!-- Verify -->
+    <div class="mb-8">
+      <button id="verify-btn" onclick="verifyProof()" disabled class="w-full bg-slate-800 text-slate-600 font-bold py-3 px-6 rounded text-sm cursor-not-allowed">Verify Proof</button>
+      <div id="verify-result" class="hidden mt-4 text-center text-sm font-bold"></div>
+    </div>
+
+    <!-- Footer -->
+    <p class="text-xs text-slate-700 italic text-center mt-8">The verifier cannot reconstruct the policy from the commitment hash. Trusted setup: test toxic waste — NOT production safe.</p>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/snarkjs@0.7.4/build/snarkjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/circomlibjs@0.1.7/build/circomlibjs.umd.min.js"></script>
+<script>
+"use strict";
+
+const state = {
+  policy: { rules: [] },
+  session: [],
+  proof: null,
+  publicSignals: null,
+  snarkjsLoaded: false,
+  circomlibLoaded: false,
+  poseidon: null,
+};
+
+const compliantPreset = {
+  policy: {
+    rules: [
+      { type: "deny_tool", tool: "delete_file" },
+      { type: "param_constraint", tool: "read_file", param: "path", not_prefix: "/etc" }
+    ]
+  },
+  session: [
+    { tool: "list_dir", params: { path: "/home/user" } },
+    { tool: "read_file", params: { path: "/home/user/notes.txt" } },
+    { tool: "write_file", params: { path: "/tmp/output.txt", content: "hello" } }
+  ]
+};
+
+const violatingPreset = {
+  policy: {
+    rules: [
+      { type: "deny_tool", tool: "delete_file" },
+      { type: "param_constraint", tool: "read_file", param: "path", not_prefix: "/etc" }
+    ]
+  },
+  session: [
+    { tool: "list_dir", params: { path: "/etc" } },
+    { tool: "read_file", params: { path: "/etc/passwd" } },
+    { tool: "delete_file", params: { path: "/important/data.txt" } }
+  ]
+};
+
+// ── Poseidon helpers ──
+
+async function initPoseidon() {
+  if (state.poseidon) return state.poseidon;
+  state.poseidon = await circomlibjs.buildPoseidon();
+  return state.poseidon;
+}
+
+function poseidonHash(poseidon, inputs) {
+  const h = poseidon(inputs.map(x => x));
+  return poseidon.F.toObject(h);
+}
+
+function stringToFieldElement(poseidon, s) {
+  if (!s || s.length === 0) return BigInt(0);
+  const enc = new TextEncoder();
+  const bytes = enc.encode(s);
+  const elements = [];
+  for (let i = 0; i < bytes.length; i += 15) {
+    let val = BigInt(0);
+    for (let j = 0; j < 15 && i + j < bytes.length; j++) {
+      val = val + BigInt(bytes[i + j]) * (BigInt(256) ** BigInt(j));
+    }
+    elements.push(val);
+  }
+  if (elements.length === 1) return elements[0];
+  while (elements.length > 1) {
+    const next = [];
+    for (let i = 0; i < elements.length; i += 5) {
+      const chunk = elements.slice(i, Math.min(i + 5, elements.length));
+      while (chunk.length < 2) chunk.push(BigInt(0));
+      next.push(poseidonHash(poseidon, chunk));
+    }
+    elements.length = 0;
+    elements.push(...next);
+  }
+  return elements[0];
+}
+
+// ── Policy compilation ──
+
+function encodeRule(poseidon, rule) {
+  const typeMap = { deny_tool: BigInt(0), param_constraint: BigInt(1), sequence_constraint: BigInt(2) };
+  const typeVal = typeMap[rule.type] || BigInt(0);
+  if (rule.type === "deny_tool") {
+    const toolHash = stringToFieldElement(poseidon, rule.tool || "");
+    return [typeVal, toolHash, BigInt(0)];
+  } else if (rule.type === "param_constraint") {
+    const toolHash = stringToFieldElement(poseidon, rule.tool || "");
+    const paramHash = stringToFieldElement(poseidon, rule.param || "");
+    const prefixHash = stringToFieldElement(poseidon, rule.not_prefix || "");
+    const combined = poseidonHash(poseidon, [toolHash, paramHash, prefixHash]);
+    return [typeVal, toolHash, combined];
+  } else if (rule.type === "sequence_constraint") {
+    const firstHash = stringToFieldElement(poseidon, rule.first || "");
+    const thenHash = stringToFieldElement(poseidon, rule.then_deny || "");
+    return [typeVal, firstHash, thenHash];
+  }
+  return [BigInt(0), BigInt(0), BigInt(0)];
+}
+
+function compilePolicy(poseidon, policyDoc) {
+  const ruleMatrix = [];
+  const activeSlots = [];
+  for (let i = 0; i < 5; i++) {
+    if (i < policyDoc.rules.length) {
+      ruleMatrix.push(encodeRule(poseidon, policyDoc.rules[i]));
+      activeSlots.push(1);
+    } else {
+      ruleMatrix.push([BigInt(0), BigInt(0), BigInt(0)]);
+      activeSlots.push(0);
+    }
+  }
+  const ruleHashes = ruleMatrix.map(r => poseidonHash(poseidon, r));
+  const commitment = poseidonHash(poseidon, ruleHashes);
+  return { ruleMatrix, commitment, activeSlots };
+}
+
+// ── Log compilation ──
+
+function hashToolCall(poseidon, call) {
+  const toolHash = stringToFieldElement(poseidon, call.tool);
+  const paramKeys = Object.keys(call.params).sort();
+  if (paramKeys.length === 0) {
+    return poseidonHash(poseidon, [toolHash, BigInt(0)]);
+  }
+  const paramElements = [];
+  for (const key of paramKeys) {
+    const kh = stringToFieldElement(poseidon, key);
+    const vh = stringToFieldElement(poseidon, call.params[key]);
+    paramElements.push(poseidonHash(poseidon, [kh, vh]));
+  }
+  let paramsHash;
+  if (paramElements.length === 1) {
+    paramsHash = paramElements[0];
+  } else {
+    const elems = paramElements.slice();
+    while (elems.length > 1) {
+      const next = [];
+      for (let i = 0; i < elems.length; i += 5) {
+        const chunk = elems.slice(i, Math.min(i + 5, elems.length));
+        while (chunk.length < 2) chunk.push(BigInt(0));
+        next.push(poseidonHash(poseidon, chunk));
+      }
+      elems.length = 0;
+      elems.push(...next);
+    }
+    paramsHash = elems[0];
+  }
+  return poseidonHash(poseidon, [toolHash, paramsHash]);
+}
+
+function compileLog(poseidon, calls) {
+  const entryHashes = [];
+  for (let i = 0; i < 8; i++) {
+    if (i < calls.length) {
+      entryHashes.push(hashToolCall(poseidon, calls[i]));
+    } else {
+      entryHashes.push(BigInt(0));
+    }
+  }
+  // Build Merkle tree
+  const layers = [entryHashes.slice()];
+  let current = entryHashes.slice();
+  while (current.length > 1) {
+    const next = [];
+    for (let i = 0; i < current.length; i += 2) {
+      const left = current[i];
+      const right = i + 1 < current.length ? current[i + 1] : BigInt(0);
+      next.push(poseidonHash(poseidon, [left, right]));
+    }
+    layers.push(next);
+    current = next;
+  }
+  const root = current[0];
+  const paths = [];
+  for (let idx = 0; idx < 8; idx++) {
+    const path = [];
+    let pos = idx;
+    for (let level = 0; level < 3; level++) {
+      const sibIdx = pos % 2 === 0 ? pos + 1 : pos - 1;
+      const sib = sibIdx < layers[level].length ? layers[level][sibIdx] : BigInt(0);
+      path.push(sib);
+      pos = Math.floor(pos / 2);
+    }
+    paths.push(path);
+  }
+  return { entryHashes, root, paths };
+}
+
+// ── Compliance check ──
+
+function checkCompliance(ruleMatrix, activeSlots, entryHashes) {
+  for (let i = 0; i < entryHashes.length; i++) {
+    for (let j = 0; j < ruleMatrix.length; j++) {
+      if (activeSlots[j] === 0) continue;
+      const rt = ruleMatrix[j][0], a1 = ruleMatrix[j][1], a2 = ruleMatrix[j][2];
+      const entry = entryHashes[i];
+      const prev = i > 0 ? entryHashes[i - 1] : BigInt(0);
+      if (rt === BigInt(0) && entry === a1) return false;
+      if (rt === BigInt(1) && entry === a2) return false;
+      if (rt === BigInt(2) && prev === a1 && entry === a2) return false;
+    }
+  }
+  return true;
+}
+
+// ── Witness builder ──
+
+function buildWitnessInput(compiledPolicy, compiledLog, isCompliant) {
+  return {
+    rules: compiledPolicy.ruleMatrix.map(r => r.map(v => v.toString())),
+    log_entries: compiledLog.entryHashes.map(v => v.toString()),
+    rule_active: compiledPolicy.activeSlots.map(v => v.toString()),
+    policy_commitment: compiledPolicy.commitment.toString(),
+    session_root: compiledLog.root.toString(),
+    is_compliant: isCompliant ? "1" : "0",
+  };
+}
+
+// ── Artifact loading ──
+
+async function fetchArtifact(name) {
+  const paths = [
+    "./artifacts/" + name,
+    "./docs/artifacts/" + name,
+    "../docs/artifacts/" + name,
+  ];
+  for (const p of paths) {
+    try {
+      const resp = await fetch(p);
+      if (resp.ok) return { url: p, resp };
+    } catch (_) {}
+  }
+  throw new Error("Could not find artifact: " + name + ". Run: bash scripts/build_circuit.sh");
+}
+
+// ── UI rendering ──
+
+function renderRules() {
+  const container = document.getElementById("rules-container");
+  container.innerHTML = "";
+  state.policy.rules.forEach((rule, idx) => {
+    const row = document.createElement("div");
+    row.className = "flex items-start gap-2 mb-2 flex-wrap";
+    let fields = "";
+    if (rule.type === "deny_tool") {
+      fields = `<input type="text" value="${esc(rule.tool || "")}" onchange="state.policy.rules[${idx}].tool=this.value" placeholder="tool name" class="w-32">`;
+    } else if (rule.type === "param_constraint") {
+      fields = `<input type="text" value="${esc(rule.tool || "")}" onchange="state.policy.rules[${idx}].tool=this.value" placeholder="tool" class="w-24">
+        <input type="text" value="${esc(rule.param || "")}" onchange="state.policy.rules[${idx}].param=this.value" placeholder="param" class="w-20">
+        <input type="text" value="${esc(rule.not_prefix || "")}" onchange="state.policy.rules[${idx}].not_prefix=this.value" placeholder="not_prefix" class="w-24">`;
+    } else if (rule.type === "sequence_constraint") {
+      fields = `<input type="text" value="${esc(rule.first || "")}" onchange="state.policy.rules[${idx}].first=this.value" placeholder="first" class="w-24">
+        <input type="text" value="${esc(rule.then_deny || "")}" onchange="state.policy.rules[${idx}].then_deny=this.value" placeholder="then_deny" class="w-24">`;
+    }
+    row.innerHTML = `
+      <select onchange="state.policy.rules[${idx}].type=this.value;renderRules()" class="w-40 text-xs">
+        <option value="deny_tool" ${rule.type === "deny_tool" ? "selected" : ""}>deny_tool</option>
+        <option value="param_constraint" ${rule.type === "param_constraint" ? "selected" : ""}>param_constraint</option>
+        <option value="sequence_constraint" ${rule.type === "sequence_constraint" ? "selected" : ""}>sequence_constraint</option>
+      </select>
+      ${fields}
+      <button onclick="state.policy.rules.splice(${idx},1);renderRules()" class="text-red-500 hover:text-red-400 text-sm px-1">&times;</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function renderSession() {
+  const container = document.getElementById("session-container");
+  container.innerHTML = "";
+  state.session.forEach((call, idx) => {
+    const paramStr = Object.entries(call.params).map(([k, v]) => k + "=" + v).join(", ");
+    const row = document.createElement("div");
+    row.className = "flex items-center gap-2 mb-2";
+    row.innerHTML = `
+      <input type="text" value="${esc(call.tool)}" onchange="state.session[${idx}].tool=this.value" placeholder="tool" class="w-28">
+      <input type="text" value="${esc(paramStr)}" onchange="parseParams(${idx}, this.value)" placeholder="key=val, key=val" class="flex-1">
+      <button onclick="state.session.splice(${idx},1);renderSession()" class="text-red-500 hover:text-red-400 text-sm px-1">&times;</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function parseParams(idx, str) {
+  const params = {};
+  str.split(",").forEach(part => {
+    const eq = part.indexOf("=");
+    if (eq > 0) {
+      params[part.substring(0, eq).trim()] = part.substring(eq + 1).trim();
+    }
+  });
+  state.session[idx].params = params;
+}
+
+function esc(s) {
+  return (s || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function addRule() {
+  if (state.policy.rules.length >= 5) return;
+  state.policy.rules.push({ type: "deny_tool", tool: "" });
+  renderRules();
+}
+
+function addToolCall() {
+  if (state.session.length >= 8) return;
+  state.session.push({ tool: "", params: {} });
+  renderSession();
+}
+
+function loadCompliant() {
+  state.policy = JSON.parse(JSON.stringify(compliantPreset.policy));
+  state.session = JSON.parse(JSON.stringify(compliantPreset.session));
+  resetVerifier();
+  renderRules();
+  renderSession();
+}
+
+function loadViolating() {
+  state.policy = JSON.parse(JSON.stringify(violatingPreset.policy));
+  state.session = JSON.parse(JSON.stringify(violatingPreset.session));
+  resetVerifier();
+  renderRules();
+  renderSession();
+}
+
+function resetVerifier() {
+  state.proof = null;
+  state.publicSignals = null;
+  document.getElementById("sig-policy").textContent = "\u2014 \u2014 \u2014";
+  document.getElementById("sig-session").textContent = "\u2014 \u2014 \u2014";
+  document.getElementById("compliance-badge").className = "inline-block px-6 py-3 rounded-lg text-sm font-bold bg-slate-800 text-slate-500";
+  document.getElementById("compliance-badge").textContent = "\u2014 AWAITING PROOF \u2014";
+  document.getElementById("verify-btn").disabled = true;
+  document.getElementById("verify-btn").className = "w-full bg-slate-800 text-slate-600 font-bold py-3 px-6 rounded text-sm cursor-not-allowed";
+  document.getElementById("verify-result").classList.add("hidden");
+  document.getElementById("proof-stats").classList.add("hidden");
+  document.getElementById("progress").classList.add("hidden");
+}
+
+// ── Proof generation ──
+
+const STEPS = ["Encoding policy", "Building session tree", "Generating witness", "Proving", "Complete"];
+
+function showProgress(stepIdx) {
+  const container = document.getElementById("progress");
+  container.classList.remove("hidden");
+  container.innerHTML = STEPS.map((s, i) => {
+    let cls = "progress-step text-slate-600";
+    let prefix = "  ";
+    if (i < stepIdx) { cls = "progress-step done"; prefix = "\u2713 "; }
+    else if (i === stepIdx) { cls = "progress-step active"; prefix = "\u25b6 "; }
+    return `<div class="${cls}">${prefix}${s}...</div>`;
+  }).join("");
+}
+
+async function generateProof() {
+  const btn = document.getElementById("generate-btn");
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  btn.className = "w-full bg-slate-700 text-slate-400 font-bold py-3 px-6 rounded text-sm cursor-wait";
+  resetVerifier();
+
+  const startTime = performance.now();
+
+  try {
+    showProgress(0);
+    const poseidon = await initPoseidon();
+    const compiled = compilePolicy(poseidon, state.policy);
+
+    showProgress(1);
+    await new Promise(r => setTimeout(r, 50));
+    const log = compileLog(poseidon, state.session);
+
+    showProgress(2);
+    await new Promise(r => setTimeout(r, 50));
+    const isCompliant = checkCompliance(compiled.ruleMatrix, compiled.activeSlots, log.entryHashes);
+    const input = buildWitnessInput(compiled, log, isCompliant);
+
+    showProgress(3);
+    const wasmArtifact = await fetchArtifact("compliance.wasm");
+    const zkeyArtifact = await fetchArtifact("compliance_final.zkey");
+
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      input,
+      wasmArtifact.url,
+      zkeyArtifact.url
+    );
+
+    showProgress(4);
+    state.proof = proof;
+    state.publicSignals = publicSignals;
+
+    const elapsed = Math.round(performance.now() - startTime);
+    const proofBytes = new TextEncoder().encode(JSON.stringify(proof)).length;
+
+    // Update right panel
+    document.getElementById("sig-policy").textContent = "0x" + BigInt(publicSignals[0]).toString(16);
+    document.getElementById("sig-session").textContent = "0x" + BigInt(publicSignals[1]).toString(16);
+
+    const badge = document.getElementById("compliance-badge");
+    if (isCompliant) {
+      badge.className = "inline-block px-6 py-3 rounded-lg text-sm font-bold bg-green-900/40 text-green-400 border border-green-700";
+      badge.textContent = "\u2713 COMPLIANT";
+    } else {
+      badge.className = "inline-block px-6 py-3 rounded-lg text-sm font-bold bg-red-900/40 text-red-400 border border-red-700";
+      badge.textContent = "\u2717 VIOLATION DETECTED";
+    }
+
+    document.getElementById("verify-btn").disabled = false;
+    document.getElementById("verify-btn").className = "w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded transition-colors text-sm";
+
+    const stats = document.getElementById("proof-stats");
+    stats.classList.remove("hidden");
+    stats.textContent = `Proof generated in ${elapsed}ms | ${proofBytes} bytes`;
+
+  } catch (err) {
+    const stats = document.getElementById("proof-stats");
+    stats.classList.remove("hidden");
+    stats.innerHTML = `<span class="text-red-400">Error: ${esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generate Proof";
+    btn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded transition-colors text-sm";
+  }
+}
+
+// ── Verification ──
+
+async function verifyProof() {
+  if (!state.proof || !state.publicSignals) return;
+
+  const resultEl = document.getElementById("verify-result");
+  resultEl.classList.remove("hidden");
+  resultEl.textContent = "Verifying...";
+  resultEl.className = "mt-4 text-center text-sm font-bold text-slate-400";
+
+  try {
+    const vkeyArtifact = await fetchArtifact("verification_key.json");
+    const vkey = await vkeyArtifact.resp.json();
+    const valid = await snarkjs.groth16.verify(vkey, state.publicSignals, state.proof);
+
+    if (valid) {
+      resultEl.textContent = "\u2713 Proof cryptographically verified";
+      resultEl.className = "mt-4 text-center text-sm font-bold text-green-400";
+    } else {
+      resultEl.textContent = "\u2717 Proof rejected";
+      resultEl.className = "mt-4 text-center text-sm font-bold text-red-400";
+    }
+  } catch (err) {
+    resultEl.textContent = "Verification error: " + err.message;
+    resultEl.className = "mt-4 text-center text-sm font-bold text-red-400";
+  }
+}
+
+// ── Init ──
+loadCompliant();
+</script>
+</body>
+</html>
