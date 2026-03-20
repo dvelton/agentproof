@@ -1,9 +1,9 @@
 pragma circom 2.0.0;
 
-include "node_modules/circomlib/circuits/poseidon.circom";
-include "node_modules/circomlib/circuits/comparators.circom";
-include "node_modules/circomlib/circuits/mux1.circom";
-include "node_modules/circomlib/circuits/bitify.circom";
+include "circomlib/circuits/poseidon.circom";
+include "circomlib/circuits/comparators.circom";
+include "circomlib/circuits/mux1.circom";
+include "circomlib/circuits/bitify.circom";
 
 // Hash a single policy rule (3 field elements) using Poseidon
 template RuleHash() {
@@ -68,30 +68,36 @@ template MerkleRoot() {
 // Check a single rule against a single log entry
 // Returns 1 if the rule passes (entry is compliant), 0 if it fails
 template CheckRule() {
-    signal input rule_type;    // 0=deny_tool, 1=param_constraint, 2=sequence_constraint
-    signal input rule_arg1;    // tool hash (deny/param) or first tool hash (sequence)
-    signal input rule_arg2;    // 0 (deny), param+prefix hash (param), or then_deny hash (seq)
-    signal input entry_hash;   // current log entry hash
-    signal input prev_entry;   // previous log entry hash (for sequence rules)
-    signal input rule_active;  // 1 if this rule slot is active
-    signal output pass;        // 1 if passes, 0 if fails
+    signal input rule_type;     // 0=deny_tool, 1=param_constraint, 2=sequence_constraint
+    signal input rule_arg1;     // tool hash (deny/param) or first tool hash (sequence)
+    signal input rule_arg2;     // 0 (deny), combined hash (param), or then_deny hash (seq)
+    signal input entry_hash;    // full entry hash (Poseidon of tool+params)
+    signal input tool_hash;     // tool name hash only (for deny_tool, sequence matching)
+    signal input prev_tool;     // previous entry's tool hash (for sequence rules)
+    signal input rule_active;   // 1 if this rule slot is active
+    signal output pass;         // 1 if passes, 0 if fails
 
-    // Check if entry matches rule_arg1
-    component eq_arg1 = IsEqual();
-    eq_arg1.in[0] <== entry_hash;
-    eq_arg1.in[1] <== rule_arg1;
+    // deny_tool: tool matches arg1
+    component eq_tool = IsEqual();
+    eq_tool.in[0] <== tool_hash;
+    eq_tool.in[1] <== rule_arg1;
 
-    // Check if entry matches rule_arg2
-    component eq_arg2 = IsEqual();
-    eq_arg2.in[0] <== entry_hash;
-    eq_arg2.in[1] <== rule_arg2;
+    // param_constraint: entry matches arg2 (combined tool+param+prefix hash)
+    component eq_entry = IsEqual();
+    eq_entry.in[0] <== entry_hash;
+    eq_entry.in[1] <== rule_arg2;
 
-    // Check if prev_entry matches rule_arg1 (for sequence rules)
-    component eq_prev = IsEqual();
-    eq_prev.in[0] <== prev_entry;
-    eq_prev.in[1] <== rule_arg1;
+    // sequence: prev tool matches arg1
+    component eq_prev_tool = IsEqual();
+    eq_prev_tool.in[0] <== prev_tool;
+    eq_prev_tool.in[1] <== rule_arg1;
 
-    // Check rule type
+    // sequence: current tool matches arg2
+    component eq_seq_tool = IsEqual();
+    eq_seq_tool.in[0] <== tool_hash;
+    eq_seq_tool.in[1] <== rule_arg2;
+
+    // Rule type checks
     component is_deny = IsEqual();
     is_deny.in[0] <== rule_type;
     is_deny.in[1] <== 0;
@@ -104,14 +110,15 @@ template CheckRule() {
     is_seq.in[0] <== rule_type;
     is_seq.in[1] <== 2;
 
-    // deny_tool fails if entry matches arg1
-    signal deny_fail <== is_deny.out * eq_arg1.out;
+    // deny_tool fails if tool matches arg1
+    signal deny_fail <== is_deny.out * eq_tool.out;
 
-    // param_constraint fails if entry matches arg2 (the combined tool+param hash)
-    signal param_fail <== is_param.out * eq_arg2.out;
+    // param_constraint fails if tool matches arg1 AND entry matches arg2
+    signal param_tool_match <== is_param.out * eq_tool.out;
+    signal param_fail <== param_tool_match * eq_entry.out;
 
-    // sequence_constraint fails if prev matches arg1 AND current matches arg2
-    signal seq_match <== eq_prev.out * eq_arg2.out;
+    // sequence_constraint fails if prev_tool matches arg1 AND current tool matches arg2
+    signal seq_match <== eq_prev_tool.out * eq_seq_tool.out;
     signal seq_fail <== is_seq.out * seq_match;
 
     // Total failure: any of the three
@@ -130,6 +137,7 @@ template Compliance() {
     // Private inputs
     signal input rules[5][3];
     signal input log_entries[8];
+    signal input log_tools[8];
     signal input rule_active[5];
 
     // Public inputs
@@ -166,11 +174,11 @@ template Compliance() {
             checks[i][j].rule_arg1 <== rules[j][1];
             checks[i][j].rule_arg2 <== rules[j][2];
             checks[i][j].entry_hash <== log_entries[i];
-            // For sequence rules, use previous entry (or 0 for first)
+            checks[i][j].tool_hash <== log_tools[i];
             if (i == 0) {
-                checks[i][j].prev_entry <== 0;
+                checks[i][j].prev_tool <== 0;
             } else {
-                checks[i][j].prev_entry <== log_entries[i-1];
+                checks[i][j].prev_tool <== log_tools[i-1];
             }
             checks[i][j].rule_active <== rule_active[j];
 

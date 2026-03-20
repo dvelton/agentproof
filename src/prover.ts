@@ -17,7 +17,8 @@ export interface ProofResult {
 function checkCompliance(
   ruleMatrix: bigint[][],
   activeSlots: number[],
-  entryHashes: bigint[]
+  entryHashes: bigint[],
+  toolHashes: bigint[]
 ): boolean {
   for (let i = 0; i < entryHashes.length; i++) {
     for (let j = 0; j < ruleMatrix.length; j++) {
@@ -26,18 +27,19 @@ function checkCompliance(
       const ruleType = ruleMatrix[j][0];
       const ruleArg1 = ruleMatrix[j][1];
       const ruleArg2 = ruleMatrix[j][2];
+      const tool = toolHashes[i];
       const entry = entryHashes[i];
-      const prevEntry = i > 0 ? entryHashes[i - 1] : BigInt(0);
+      const prevTool = i > 0 ? toolHashes[i - 1] : BigInt(0);
 
       if (ruleType === BigInt(0)) {
-        // deny_tool: fails if entry matches arg1
-        if (entry === ruleArg1) return false;
+        // deny_tool: fails if tool matches arg1
+        if (tool === ruleArg1) return false;
       } else if (ruleType === BigInt(1)) {
-        // param_constraint: fails if entry matches arg2
-        if (entry === ruleArg2) return false;
+        // param_constraint: fails if tool matches arg1 AND entry matches arg2
+        if (tool === ruleArg1 && entry === ruleArg2) return false;
       } else if (ruleType === BigInt(2)) {
-        // sequence_constraint: fails if prev matches arg1 AND current matches arg2
-        if (prevEntry === ruleArg1 && entry === ruleArg2) return false;
+        // sequence_constraint: fails if prev tool matches arg1 AND current tool matches arg2
+        if (prevTool === ruleArg1 && tool === ruleArg2) return false;
       }
     }
   }
@@ -58,7 +60,8 @@ export async function prove(
   const isCompliant = checkCompliance(
     compiledPolicy.ruleMatrix,
     compiledPolicy.activeSlots,
-    compiledLog.entryHashes
+    compiledLog.entryHashes,
+    compiledLog.toolHashes
   );
 
   // Build witness input
@@ -68,6 +71,7 @@ export async function prove(
       row.map((v) => v.toString())
     ),
     log_entries: compiledLog.entryHashes.map((v) => v.toString()),
+    log_tools: compiledLog.toolHashes.map((v) => v.toString()),
     rule_active: compiledPolicy.activeSlots.map((v) => v.toString()),
 
     // Public inputs

@@ -6,7 +6,7 @@ CIRCUIT_DIR="circuits"
 CIRCUIT_NAME="compliance"
 PTAU_SIZE=15
 PTAU_FILE="powersOfTau28_hez_final_${PTAU_SIZE}.ptau"
-PTAU_URL="https://hermez.s3-eu-west-1.amazonaws.com/${PTAU_FILE}"
+PTAU_URL="https://storage.googleapis.com/zkevm/ptau/${PTAU_FILE}"
 
 # Check for --force flag
 FORCE=false

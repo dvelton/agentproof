@@ -321,11 +321,14 @@ function hashToolCall(poseidon, call) {
 
 function compileLog(poseidon, calls) {
   const entryHashes = [];
+  const toolHashes = [];
   for (let i = 0; i < 8; i++) {
     if (i < calls.length) {
       entryHashes.push(hashToolCall(poseidon, calls[i]));
+      toolHashes.push(stringToFieldElement(poseidon, calls[i].tool));
     } else {
       entryHashes.push(BigInt(0));
+      toolHashes.push(BigInt(0));
     }
   }
   // Build Merkle tree
@@ -354,21 +357,22 @@ function compileLog(poseidon, calls) {
     }
     paths.push(path);
   }
-  return { entryHashes, root, paths };
+  return { entryHashes, toolHashes, root, paths };
 }
 
 // ── Compliance check ──
 
-function checkCompliance(ruleMatrix, activeSlots, entryHashes) {
+function checkCompliance(ruleMatrix, activeSlots, entryHashes, toolHashes) {
   for (let i = 0; i < entryHashes.length; i++) {
     for (let j = 0; j < ruleMatrix.length; j++) {
       if (activeSlots[j] === 0) continue;
       const rt = ruleMatrix[j][0], a1 = ruleMatrix[j][1], a2 = ruleMatrix[j][2];
+      const tool = toolHashes[i];
       const entry = entryHashes[i];
-      const prev = i > 0 ? entryHashes[i - 1] : BigInt(0);
-      if (rt === BigInt(0) && entry === a1) return false;
-      if (rt === BigInt(1) && entry === a2) return false;
-      if (rt === BigInt(2) && prev === a1 && entry === a2) return false;
+      const prevTool = i > 0 ? toolHashes[i - 1] : BigInt(0);
+      if (rt === BigInt(0) && tool === a1) return false;
+      if (rt === BigInt(1) && tool === a1 && entry === a2) return false;
+      if (rt === BigInt(2) && prevTool === a1 && tool === a2) return false;
     }
   }
   return true;
@@ -380,6 +384,7 @@ function buildWitnessInput(compiledPolicy, compiledLog, isCompliant) {
   return {
     rules: compiledPolicy.ruleMatrix.map(r => r.map(v => v.toString())),
     log_entries: compiledLog.entryHashes.map(v => v.toString()),
+    log_tools: compiledLog.toolHashes.map(v => v.toString()),
     rule_active: compiledPolicy.activeSlots.map(v => v.toString()),
     policy_commitment: compiledPolicy.commitment.toString(),
     session_root: compiledLog.root.toString(),
@@ -545,7 +550,7 @@ async function generateProof() {
 
     showProgress(2);
     await new Promise(r => setTimeout(r, 50));
-    const isCompliant = checkCompliance(compiled.ruleMatrix, compiled.activeSlots, log.entryHashes);
+    const isCompliant = checkCompliance(compiled.ruleMatrix, compiled.activeSlots, log.entryHashes, log.toolHashes);
     const input = buildWitnessInput(compiled, log, isCompliant);
 
     showProgress(3);

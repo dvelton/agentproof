@@ -7,6 +7,7 @@ export interface ToolCall {
 
 export interface CompiledLog {
   entryHashes: bigint[];
+  toolHashes: bigint[];
   root: bigint;
   paths: bigint[][];
 }
@@ -138,11 +139,14 @@ export async function compileLog(calls: ToolCall[]): Promise<CompiledLog> {
 
   // Hash each tool call
   const entryHashes: bigint[] = [];
+  const toolHashes: bigint[] = [];
   for (let i = 0; i < MAX_ENTRIES; i++) {
     if (i < calls.length) {
       entryHashes.push(hashToolCall(poseidon, calls[i]));
+      toolHashes.push(stringToFieldElement(poseidon, calls[i].tool));
     } else {
       entryHashes.push(BigInt(0));
+      toolHashes.push(BigInt(0));
     }
   }
 
@@ -155,5 +159,5 @@ export async function compileLog(calls: ToolCall[]): Promise<CompiledLog> {
     paths.push(getMerklePaths(layers, i));
   }
 
-  return { entryHashes, root, paths };
+  return { entryHashes, toolHashes, root, paths };
 }

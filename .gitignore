@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.ptau
+docs/artifacts/compliance.r1cs
+docs/artifacts/compliance.sym
+docs/artifacts/compliance_js/
+docs/artifacts/compliance_0000.zkey
