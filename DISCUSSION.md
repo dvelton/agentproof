@@ -26,6 +26,4 @@ Open a GitHub Discussion or file an issue to contribute.
 
 ## Related work
 
-- **zk-MCP** ([arxiv.org/abs/2512.14737](https://arxiv.org/abs/2512.14737)) — Privacy-preserving audit framework integrating ZK proofs with the Model Context Protocol for agent interaction verification.
-- **ezkl** ([github.com/zkonduit/ezkl](https://github.com/zkonduit/ezkl)) — ZK proof generation for ML model inferences, proving a specific model produced a specific output.
-- **ICME / JOLT-Atlas** ([icme.io](https://www.icme.io/)) — Developer tooling for exporting AI models and compliance logic into verifiable zkSNARK circuits.
+- **zk-MCP** ([arxiv.org/abs/2512.14737](https://arxiv.org/abs/2512.14737))
