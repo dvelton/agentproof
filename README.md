@@ -1,4 +1,4 @@
-AI agents operate on instruction documents (policies) that govern what tools they can use, what data they can access, and what sequences of actions they're allowed to take. There is currently no way to prove an agent followed those instructions without either revealing the instructions to the verifier or trusting the agent's own report.
+AI agents operate on instruction documents (policies) that govern what tools they can use, what data they can access, and what sequences of actions they're allowed to take. Proving an agent followed its policy typically requires either revealing the policy to the verifier or trusting the agent's own report.
 
 ## What this is
 
