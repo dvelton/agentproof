@@ -165,7 +165,11 @@ tailwind.config = {
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/snarkjs@0.7.4/build/snarkjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/circomlibjs@0.1.7/build/circomlibjs.umd.min.js"></script>
+<script type="module">
+import { buildPoseidon } from "https://esm.sh/circomlibjs@0.1.7";
+window._buildPoseidon = buildPoseidon;
+window.dispatchEvent(new Event("poseidon-ready"));
+</script>
 <script>
 "use strict";
 
@@ -211,7 +215,10 @@ const violatingPreset = {
 
 async function initPoseidon() {
   if (state.poseidon) return state.poseidon;
-  state.poseidon = await circomlibjs.buildPoseidon();
+  if (!window._buildPoseidon) {
+    await new Promise(r => window.addEventListener("poseidon-ready", r, { once: true }));
+  }
+  state.poseidon = await window._buildPoseidon();
   return state.poseidon;
 }
 
